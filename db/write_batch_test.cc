@@ -60,7 +60,8 @@ static std::string PrintContents(WriteBatch* b,
       arena_iter_guard.set(iter);
     } else {
       iter = mem->NewRangeTombstoneIterator(ReadOptions(),
-                                            kMaxSequenceNumber /* read_seq */);
+                                            kMaxSequenceNumber /* read_seq */,
+                                            false /* immutable_memtable */);
       iter_guard.reset(iter);
     }
     if (iter == nullptr) {
@@ -118,7 +119,7 @@ static std::string PrintContents(WriteBatch* b,
           break;
       }
       state.append("@");
-      state.append(ToString(ikey.sequence));
+      state.append(std::to_string(ikey.sequence));
     }
     EXPECT_OK(iter->status());
   }
@@ -253,7 +254,7 @@ namespace {
       if (column_family_id == 0) {
         seen += "Put(" + key.ToString() + ", " + value.ToString() + ")";
       } else {
-        seen += "PutCF(" + ToString(column_family_id) + ", " +
+        seen += "PutCF(" + std::to_string(column_family_id) + ", " +
                 key.ToString() + ", " + value.ToString() + ")";
       }
       return Status::OK();
@@ -262,7 +263,7 @@ namespace {
       if (column_family_id == 0) {
         seen += "Delete(" + key.ToString() + ")";
       } else {
-        seen += "DeleteCF(" + ToString(column_family_id) + ", " +
+        seen += "DeleteCF(" + std::to_string(column_family_id) + ", " +
                 key.ToString() + ")";
       }
       return Status::OK();
@@ -272,7 +273,7 @@ namespace {
       if (column_family_id == 0) {
         seen += "SingleDelete(" + key.ToString() + ")";
       } else {
-        seen += "SingleDeleteCF(" + ToString(column_family_id) + ", " +
+        seen += "SingleDeleteCF(" + std::to_string(column_family_id) + ", " +
                 key.ToString() + ")";
       }
       return Status::OK();
@@ -283,7 +284,7 @@ namespace {
         seen += "DeleteRange(" + begin_key.ToString() + ", " +
                 end_key.ToString() + ")";
       } else {
-        seen += "DeleteRangeCF(" + ToString(column_family_id) + ", " +
+        seen += "DeleteRangeCF(" + std::to_string(column_family_id) + ", " +
                 begin_key.ToString() + ", " + end_key.ToString() + ")";
       }
       return Status::OK();
@@ -293,7 +294,7 @@ namespace {
       if (column_family_id == 0) {
         seen += "Merge(" + key.ToString() + ", " + value.ToString() + ")";
       } else {
-        seen += "MergeCF(" + ToString(column_family_id) + ", " +
+        seen += "MergeCF(" + std::to_string(column_family_id) + ", " +
                 key.ToString() + ", " + value.ToString() + ")";
       }
       return Status::OK();
