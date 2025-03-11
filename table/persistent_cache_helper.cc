@@ -4,6 +4,7 @@
 //  (found in the LICENSE.Apache file in the root directory).
 
 #include "table/persistent_cache_helper.h"
+
 #include "table/block_based/block_based_table_reader.h"
 #include "table/format.h"
 
@@ -39,7 +40,6 @@ void PersistentCacheHelper::InsertUncompressed(
   cache_options.persistent_cache
       ->Insert(key.AsSlice(), contents.data.data(), contents.data.size())
       .PermitUncheckedError();
-  ;
 }
 
 Status PersistentCacheHelper::LookupSerialized(

@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
-from __future__ import absolute_import, division, print_function, unicode_literals
 
 import glob
 
@@ -100,14 +99,14 @@ class LDBTestCase(unittest.TestCase):
         Uses the default test db.
         """
         self.assertRunOKFull(
-            "%s %s" % (self.dbParam(self.DB_NAME), params), expectedOutput, unexpected
+            "{} {}".format(self.dbParam(self.DB_NAME), params), expectedOutput, unexpected
         )
 
     def assertRunFAIL(self, params):
         """
         Uses the default test db.
         """
-        self.assertRunFAILFull("%s %s" % (self.dbParam(self.DB_NAME), params))
+        self.assertRunFAILFull("{} {}".format(self.dbParam(self.DB_NAME), params))
 
     def testSimpleStringPutGet(self):
         print("Running testSimpleStringPutGet...")
@@ -119,34 +118,59 @@ class LDBTestCase(unittest.TestCase):
         self.assertRunOK("put x2 y2", "OK")
         self.assertRunOK("get x1", "y1")
         self.assertRunOK("get x2", "y2")
-        self.assertRunFAIL("get x3")
+        self.assertRunOK("multi_get x1 x2", "x1 ==> y1\nx2 ==> y2")
+        self.assertRunOK("get x3", "Key not found")
+        self.assertRunOK("multi_get x3", "Key not found: x3")
 
-        self.assertRunOK("scan --from=x1 --to=z", "x1 : y1\nx2 : y2")
+        self.assertRunFAIL("put_entity x4")
+        self.assertRunFAIL("put_entity x4 cv1")
+        self.assertRunOK("put_entity x4 :cv1", "OK")
+        self.assertRunOK("get_entity x4", ":cv1")
+
+        self.assertRunOK("put_entity x5 cn1:cv1 cn2:cv2", "OK")
+        self.assertRunOK("get_entity x5", "cn1:cv1 cn2:cv2")
+
+        self.assertRunOK(
+            "scan --from=x1 --to=z",
+            "x1 ==> y1\nx2 ==> y2\nx4 ==> cv1\nx5 ==> cn1:cv1 cn2:cv2",
+        )
         self.assertRunOK("put x3 y3", "OK")
 
-        self.assertRunOK("scan --from=x1 --to=z", "x1 : y1\nx2 : y2\nx3 : y3")
-        self.assertRunOK("scan", "x1 : y1\nx2 : y2\nx3 : y3")
-        self.assertRunOK("scan --from=x", "x1 : y1\nx2 : y2\nx3 : y3")
-
-        self.assertRunOK("scan --to=x2", "x1 : y1")
-        self.assertRunOK("scan --from=x1 --to=z --max_keys=1", "x1 : y1")
-        self.assertRunOK("scan --from=x1 --to=z --max_keys=2", "x1 : y1\nx2 : y2")
-
         self.assertRunOK(
-            "scan --from=x1 --to=z --max_keys=3", "x1 : y1\nx2 : y2\nx3 : y3"
+            "scan --from=x1 --to=z",
+            "x1 ==> y1\nx2 ==> y2\nx3 ==> y3\nx4 ==> cv1\nx5 ==> cn1:cv1 cn2:cv2",
         )
         self.assertRunOK(
-            "scan --from=x1 --to=z --max_keys=4", "x1 : y1\nx2 : y2\nx3 : y3"
+            "scan",
+            "x1 ==> y1\nx2 ==> y2\nx3 ==> y3\nx4 ==> cv1\nx5 ==> cn1:cv1 cn2:cv2",
         )
-        self.assertRunOK("scan --from=x1 --to=x2", "x1 : y1")
-        self.assertRunOK("scan --from=x2 --to=x4", "x2 : y2\nx3 : y3")
+        self.assertRunOK(
+            "scan --from=x",
+            "x1 ==> y1\nx2 ==> y2\nx3 ==> y3\nx4 ==> cv1\nx5 ==> cn1:cv1 cn2:cv2",
+        )
+
+        self.assertRunOK("scan --to=x2", "x1 ==> y1")
+        self.assertRunOK("scan --from=x1 --to=z --max_keys=1", "x1 ==> y1")
+        self.assertRunOK("scan --from=x1 --to=z --max_keys=2", "x1 ==> y1\nx2 ==> y2")
+
+        self.assertRunOK("delete x4", "OK")
+        self.assertRunOK("delete x5", "OK")
+
+        self.assertRunOK(
+            "scan --from=x1 --to=z --max_keys=3", "x1 ==> y1\nx2 ==> y2\nx3 ==> y3"
+        )
+        self.assertRunOK(
+            "scan --from=x1 --to=z --max_keys=4", "x1 ==> y1\nx2 ==> y2\nx3 ==> y3"
+        )
+        self.assertRunOK("scan --from=x1 --to=x2", "x1 ==> y1")
+        self.assertRunOK("scan --from=x2 --to=x4", "x2 ==> y2\nx3 ==> y3")
         self.assertRunFAIL("scan --from=x4 --to=z")  # No results => FAIL
         self.assertRunFAIL("scan --from=x1 --to=z --max_keys=foo")
 
-        self.assertRunOK("scan", "x1 : y1\nx2 : y2\nx3 : y3")
+        self.assertRunOK("scan", "x1 ==> y1\nx2 ==> y2\nx3 ==> y3")
 
         self.assertRunOK("delete x1", "OK")
-        self.assertRunOK("scan", "x2 : y2\nx3 : y3")
+        self.assertRunOK("scan", "x2 ==> y2\nx3 ==> y3")
 
         self.assertRunOK("delete NonExistentKey", "OK")
         # It is weird that GET and SCAN raise exception for
@@ -155,25 +179,25 @@ class LDBTestCase(unittest.TestCase):
         self.assertRunOK("checkconsistency", "OK")
 
     def dumpDb(self, params, dumpFile):
-        return 0 == run_err_null("./ldb dump %s > %s" % (params, dumpFile))
+        return 0 == run_err_null("./ldb dump {} > {}".format(params, dumpFile))
 
     def loadDb(self, params, dumpFile):
-        return 0 == run_err_null("cat %s | ./ldb load %s" % (dumpFile, params))
+        return 0 == run_err_null("cat {} | ./ldb load {}".format(dumpFile, params))
 
     def writeExternSst(self, params, inputDumpFile, outputSst):
         return 0 == run_err_null(
-            "cat %s | ./ldb write_extern_sst %s %s" % (inputDumpFile, outputSst, params)
+            "cat {} | ./ldb write_extern_sst {} {}".format(inputDumpFile, outputSst, params)
         )
 
     def ingestExternSst(self, params, inputSst):
-        return 0 == run_err_null("./ldb ingest_extern_sst %s %s" % (inputSst, params))
+        return 0 == run_err_null("./ldb ingest_extern_sst {} {}".format(inputSst, params))
 
     def testStringBatchPut(self):
         print("Running testStringBatchPut...")
         self.assertRunOK("batchput x1 y1 --create_if_missing", "OK")
-        self.assertRunOK("scan", "x1 : y1")
+        self.assertRunOK("scan", "x1 ==> y1")
         self.assertRunOK('batchput x2 y2 x3 y3 "x4 abc" "y4 xyz"', "OK")
-        self.assertRunOK("scan", "x1 : y1\nx2 : y2\nx3 : y3\nx4 abc : y4 xyz")
+        self.assertRunOK("scan", "x1 ==> y1\nx2 ==> y2\nx3 ==> y3\nx4 abc ==> y4 xyz")
         self.assertRunFAIL("batchput")
         self.assertRunFAIL("batchput k1")
         self.assertRunFAIL("batchput k1 v1 k2")
@@ -183,11 +207,11 @@ class LDBTestCase(unittest.TestCase):
 
         dbPath = os.path.join(self.TMP_DIR, self.DB_NAME)
         self.assertRunOK("batchput x1 y1 --create_if_missing --enable_blob_files", "OK")
-        self.assertRunOK("scan", "x1 : y1")
+        self.assertRunOK("scan", "x1 ==> y1")
         self.assertRunOK(
             'batchput --enable_blob_files x2 y2 x3 y3 "x4 abc" "y4 xyz"', "OK"
         )
-        self.assertRunOK("scan", "x1 : y1\nx2 : y2\nx3 : y3\nx4 abc : y4 xyz")
+        self.assertRunOK("scan", "x1 ==> y1\nx2 ==> y2\nx3 ==> y3\nx4 abc ==> y4 xyz")
 
         blob_files = self.getBlobFiles(dbPath)
         self.assertTrue(len(blob_files) >= 1)
@@ -278,41 +302,44 @@ class LDBTestCase(unittest.TestCase):
     def testHexPutGet(self):
         print("Running testHexPutGet...")
         self.assertRunOK("put a1 b1 --create_if_missing", "OK")
-        self.assertRunOK("scan", "a1 : b1")
-        self.assertRunOK("scan --hex", "0x6131 : 0x6231")
+        self.assertRunOK("scan", "a1 ==> b1")
+        self.assertRunOK("scan --hex", "0x6131 ==> 0x6231")
         self.assertRunFAIL("put --hex 6132 6232")
         self.assertRunOK("put --hex 0x6132 0x6232", "OK")
-        self.assertRunOK("scan --hex", "0x6131 : 0x6231\n0x6132 : 0x6232")
-        self.assertRunOK("scan", "a1 : b1\na2 : b2")
+        self.assertRunOK("scan --hex", "0x6131 ==> 0x6231\n0x6132 ==> 0x6232")
+        self.assertRunOK("scan", "a1 ==> b1\na2 ==> b2")
         self.assertRunOK("get a1", "b1")
         self.assertRunOK("get --hex 0x6131", "0x6231")
         self.assertRunOK("get a2", "b2")
         self.assertRunOK("get --hex 0x6132", "0x6232")
+        self.assertRunOK("multi_get --hex 0x6131 0x6132", "0x6131 ==> 0x6231\n0x6132 ==> 0x6232")
+        self.assertRunOK("multi_get --hex 0x6131 0xBEEF", "0x6131 ==> 0x6231\nKey not found: 0xBEEF")
         self.assertRunOK("get --key_hex 0x6132", "b2")
         self.assertRunOK("get --key_hex --value_hex 0x6132", "0x6232")
         self.assertRunOK("get --value_hex a2", "0x6232")
         self.assertRunOK(
-            "scan --key_hex --value_hex", "0x6131 : 0x6231\n0x6132 : 0x6232"
+            "scan --key_hex --value_hex", "0x6131 ==> 0x6231\n0x6132 ==> 0x6232"
         )
         self.assertRunOK(
-            "scan --hex --from=0x6131 --to=0x6133", "0x6131 : 0x6231\n0x6132 : 0x6232"
+            "scan --hex --from=0x6131 --to=0x6133",
+            "0x6131 ==> 0x6231\n0x6132 ==> 0x6232",
         )
-        self.assertRunOK("scan --hex --from=0x6131 --to=0x6132", "0x6131 : 0x6231")
-        self.assertRunOK("scan --key_hex", "0x6131 : b1\n0x6132 : b2")
-        self.assertRunOK("scan --value_hex", "a1 : 0x6231\na2 : 0x6232")
+        self.assertRunOK("scan --hex --from=0x6131 --to=0x6132", "0x6131 ==> 0x6231")
+        self.assertRunOK("scan --key_hex", "0x6131 ==> b1\n0x6132 ==> b2")
+        self.assertRunOK("scan --value_hex", "a1 ==> 0x6231\na2 ==> 0x6232")
         self.assertRunOK("batchput --hex 0x6133 0x6233 0x6134 0x6234", "OK")
-        self.assertRunOK("scan", "a1 : b1\na2 : b2\na3 : b3\na4 : b4")
+        self.assertRunOK("scan", "a1 ==> b1\na2 ==> b2\na3 ==> b3\na4 ==> b4")
         self.assertRunOK("delete --hex 0x6133", "OK")
-        self.assertRunOK("scan", "a1 : b1\na2 : b2\na4 : b4")
+        self.assertRunOK("scan", "a1 ==> b1\na2 ==> b2\na4 ==> b4")
         self.assertRunOK("checkconsistency", "OK")
 
     def testTtlPutGet(self):
         print("Running testTtlPutGet...")
         self.assertRunOK("put a1 b1 --ttl --create_if_missing", "OK")
-        self.assertRunOK("scan --hex", "0x6131 : 0x6231", True)
+        self.assertRunOK("scan --hex", "0x6131 ==> 0x6231", True)
         self.assertRunOK("dump --ttl ", "a1 ==> b1", True)
         self.assertRunOK("dump --hex --ttl ", "0x6131 ==> 0x6231\nKeys in range: 1")
-        self.assertRunOK("scan --hex --ttl", "0x6131 : 0x6231")
+        self.assertRunOK("scan --hex --ttl", "0x6131 ==> 0x6231")
         self.assertRunOK("get --value_hex a1", "0x6231", True)
         self.assertRunOK("get --ttl a1", "b1")
         self.assertRunOK("put a3 b3 --create_if_missing", "OK")
@@ -334,7 +361,7 @@ class LDBTestCase(unittest.TestCase):
     def testDumpLoad(self):
         print("Running testDumpLoad...")
         self.assertRunOK("batchput --create_if_missing x1 y1 x2 y2 x3 y3 x4 y4", "OK")
-        self.assertRunOK("scan", "x1 : y1\nx2 : y2\nx3 : y3\nx4 : y4")
+        self.assertRunOK("scan", "x1 ==> y1\nx2 ==> y2\nx3 ==> y3\nx4 ==> y4")
         origDbPath = os.path.join(self.TMP_DIR, self.DB_NAME)
 
         # Dump and load without any additional params specified
@@ -345,7 +372,7 @@ class LDBTestCase(unittest.TestCase):
             self.loadDb("--db=%s --create_if_missing" % loadedDbPath, dumpFilePath)
         )
         self.assertRunOKFull(
-            "scan --db=%s" % loadedDbPath, "x1 : y1\nx2 : y2\nx3 : y3\nx4 : y4"
+            "scan --db=%s" % loadedDbPath, "x1 ==> y1\nx2 ==> y2\nx3 ==> y3\nx4 ==> y4"
         )
 
         # Dump and load in hex
@@ -358,7 +385,7 @@ class LDBTestCase(unittest.TestCase):
             )
         )
         self.assertRunOKFull(
-            "scan --db=%s" % loadedDbPath, "x1 : y1\nx2 : y2\nx3 : y3\nx4 : y4"
+            "scan --db=%s" % loadedDbPath, "x1 ==> y1\nx2 ==> y2\nx3 ==> y3\nx4 ==> y4"
         )
 
         # Dump only a portion of the key range
@@ -370,7 +397,7 @@ class LDBTestCase(unittest.TestCase):
         self.assertTrue(
             self.loadDb("--db=%s --create_if_missing" % loadedDbPath, dumpFilePath)
         )
-        self.assertRunOKFull("scan --db=%s" % loadedDbPath, "x1 : y1\nx2 : y2")
+        self.assertRunOKFull("scan --db=%s" % loadedDbPath, "x1 ==> y1\nx2 ==> y2")
 
         # Dump upto max_keys rows
         dumpFilePath = os.path.join(self.TMP_DIR, "dump4")
@@ -379,13 +406,15 @@ class LDBTestCase(unittest.TestCase):
         self.assertTrue(
             self.loadDb("--db=%s --create_if_missing" % loadedDbPath, dumpFilePath)
         )
-        self.assertRunOKFull("scan --db=%s" % loadedDbPath, "x1 : y1\nx2 : y2\nx3 : y3")
+        self.assertRunOKFull(
+            "scan --db=%s" % loadedDbPath, "x1 ==> y1\nx2 ==> y2\nx3 ==> y3"
+        )
 
         # Load into an existing db, create_if_missing is not specified
         self.assertTrue(self.dumpDb("--db=%s" % origDbPath, dumpFilePath))
         self.assertTrue(self.loadDb("--db=%s" % loadedDbPath, dumpFilePath))
         self.assertRunOKFull(
-            "scan --db=%s" % loadedDbPath, "x1 : y1\nx2 : y2\nx3 : y3\nx4 : y4"
+            "scan --db=%s" % loadedDbPath, "x1 ==> y1\nx2 ==> y2\nx3 ==> y3\nx4 ==> y4"
         )
 
         # Dump and load with WAL disabled
@@ -398,7 +427,7 @@ class LDBTestCase(unittest.TestCase):
             )
         )
         self.assertRunOKFull(
-            "scan --db=%s" % loadedDbPath, "x1 : y1\nx2 : y2\nx3 : y3\nx4 : y4"
+            "scan --db=%s" % loadedDbPath, "x1 ==> y1\nx2 ==> y2\nx3 ==> y3\nx4 ==> y4"
         )
 
         # Dump and load with lots of extra params specified
@@ -414,16 +443,16 @@ class LDBTestCase(unittest.TestCase):
         dumpFilePath = os.path.join(self.TMP_DIR, "dump6")
         loadedDbPath = os.path.join(self.TMP_DIR, "loaded_from_dump6")
         self.assertTrue(
-            self.dumpDb("--db=%s %s" % (origDbPath, extraParams), dumpFilePath)
+            self.dumpDb("--db={} {}".format(origDbPath, extraParams), dumpFilePath)
         )
         self.assertTrue(
             self.loadDb(
-                "--db=%s %s --create_if_missing" % (loadedDbPath, extraParams),
+                "--db={} {} --create_if_missing".format(loadedDbPath, extraParams),
                 dumpFilePath,
             )
         )
         self.assertRunOKFull(
-            "scan --db=%s" % loadedDbPath, "x1 : y1\nx2 : y2\nx3 : y3\nx4 : y4"
+            "scan --db=%s" % loadedDbPath, "x1 ==> y1\nx2 ==> y2\nx3 ==> y3\nx4 ==> y4"
         )
 
         # Dump with count_only
@@ -435,7 +464,7 @@ class LDBTestCase(unittest.TestCase):
         )
         # DB should have atleast one value for scan to work
         self.assertRunOKFull("put --db=%s k1 v1" % loadedDbPath, "OK")
-        self.assertRunOKFull("scan --db=%s" % loadedDbPath, "k1 : v1")
+        self.assertRunOKFull("scan --db=%s" % loadedDbPath, "k1 ==> v1")
 
         # Dump command fails because of typo in params
         dumpFilePath = os.path.join(self.TMP_DIR, "dump8")
@@ -458,7 +487,7 @@ class LDBTestCase(unittest.TestCase):
             )
         )
         self.assertRunOKFull(
-            "scan --db=%s" % loadedDbPath, "x1 : y1\nx2 : y2\nx3 : y3\nx4 : y4"
+            "scan --db=%s" % loadedDbPath, "x1 ==> y1\nx2 ==> y2\nx3 ==> y3\nx4 ==> y4"
         )
         blob_files = self.getBlobFiles(loadedDbPath)
         self.assertTrue(len(blob_files) >= 1)
@@ -473,7 +502,7 @@ class LDBTestCase(unittest.TestCase):
             "'b' seq:2, type:1 => val\nInternal keys in range: 2",
         )
         self.assertRunOK(
-            "idump --input_key_hex --from=%s --to=%s" % (hex(ord("a")), hex(ord("b"))),
+            "idump --input_key_hex --from={} --to={}".format(hex(ord("a")), hex(ord("b"))),
             "'a' seq:1, type:1 => val\nInternal keys in range: 1",
         )
 
@@ -483,7 +512,7 @@ class LDBTestCase(unittest.TestCase):
         self.assertRunOK("put b val --enable_blob_files", "OK")
 
         # Pattern to expect from dump with decode_blob_index flag enabled.
-        regex = ".*\[blob ref\].*"
+        regex = r".*\[blob ref\].*"
         expected_pattern = re.compile(regex)
         cmd = "idump %s --decode_blob_index"
         self.assertRunOKFull(
@@ -498,26 +527,26 @@ class LDBTestCase(unittest.TestCase):
         # These tests need to be improved; for example with asserts about
         # whether compaction or level reduction actually took place.
         self.assertRunOK("batchput --create_if_missing x1 y1 x2 y2 x3 y3 x4 y4", "OK")
-        self.assertRunOK("scan", "x1 : y1\nx2 : y2\nx3 : y3\nx4 : y4")
+        self.assertRunOK("scan", "x1 ==> y1\nx2 ==> y2\nx3 ==> y3\nx4 ==> y4")
         origDbPath = os.path.join(self.TMP_DIR, self.DB_NAME)
 
         self.assertTrue(0 == run_err_null("./ldb compact --db=%s" % origDbPath))
-        self.assertRunOK("scan", "x1 : y1\nx2 : y2\nx3 : y3\nx4 : y4")
+        self.assertRunOK("scan", "x1 ==> y1\nx2 ==> y2\nx3 ==> y3\nx4 ==> y4")
 
         self.assertTrue(
             0 == run_err_null("./ldb reduce_levels --db=%s --new_levels=2" % origDbPath)
         )
-        self.assertRunOK("scan", "x1 : y1\nx2 : y2\nx3 : y3\nx4 : y4")
+        self.assertRunOK("scan", "x1 ==> y1\nx2 ==> y2\nx3 ==> y3\nx4 ==> y4")
 
         self.assertTrue(
             0 == run_err_null("./ldb reduce_levels --db=%s --new_levels=3" % origDbPath)
         )
-        self.assertRunOK("scan", "x1 : y1\nx2 : y2\nx3 : y3\nx4 : y4")
+        self.assertRunOK("scan", "x1 ==> y1\nx2 ==> y2\nx3 ==> y3\nx4 ==> y4")
 
         self.assertTrue(
             0 == run_err_null("./ldb compact --db=%s --from=x1 --to=x3" % origDbPath)
         )
-        self.assertRunOK("scan", "x1 : y1\nx2 : y2\nx3 : y3\nx4 : y4")
+        self.assertRunOK("scan", "x1 ==> y1\nx2 ==> y2\nx3 ==> y3\nx4 ==> y4")
 
         self.assertTrue(
             0
@@ -525,17 +554,17 @@ class LDBTestCase(unittest.TestCase):
                 "./ldb compact --db=%s --hex --from=0x6131 --to=0x6134" % origDbPath
             )
         )
-        self.assertRunOK("scan", "x1 : y1\nx2 : y2\nx3 : y3\nx4 : y4")
+        self.assertRunOK("scan", "x1 ==> y1\nx2 ==> y2\nx3 ==> y3\nx4 ==> y4")
 
         # TODO(dilip): Not sure what should be passed to WAL.Currently corrupted.
         self.assertTrue(
             0
             == run_err_null(
                 "./ldb dump_wal --db=%s --walfile=%s --header"
-                % (origDbPath, os.path.join(origDbPath, "LOG"))
+                % (origDbPath, origDbPath)
             )
         )
-        self.assertRunOK("scan", "x1 : y1\nx2 : y2\nx3 : y3\nx4 : y4")
+        self.assertRunOK("scan", "x1 ==> y1\nx2 ==> y2\nx3 ==> y3\nx4 ==> y4")
 
     def testCheckConsistency(self):
         print("Running testCheckConsistency...")
@@ -559,7 +588,7 @@ class LDBTestCase(unittest.TestCase):
         self.assertRunFAIL("checkconsistency")
 
     def dumpLiveFiles(self, params, dumpFile):
-        return 0 == run_err_null("./ldb dump_live_files %s > %s" % (params, dumpFile))
+        return 0 == run_err_null("./ldb dump_live_files {} > {}".format(params, dumpFile))
 
     def testDumpLiveFiles(self):
         print("Running testDumpLiveFiles...")
@@ -590,7 +619,7 @@ class LDBTestCase(unittest.TestCase):
         )
 
         # Investigate the output
-        with open(dumpFilePath, "r") as tmp:
+        with open(dumpFilePath) as tmp:
             data = tmp.read()
 
         # Check that all the SST filenames have a correct full path (no multiple '/').
@@ -621,7 +650,7 @@ class LDBTestCase(unittest.TestCase):
 
     def listLiveFilesMetadata(self, params, dumpFile):
         return 0 == run_err_null(
-            "./ldb list_live_files_metadata %s > %s" % (params, dumpFile)
+            "./ldb list_live_files_metadata {} > {}".format(params, dumpFile)
         )
 
     def testListLiveFilesMetadata(self):
@@ -643,13 +672,13 @@ class LDBTestCase(unittest.TestCase):
         )
 
         # Collect SST filename and level from dump_live_files
-        with open(dumpFilePath1, "r") as tmp:
+        with open(dumpFilePath1) as tmp:
             data = tmp.read()
             filename1 = re.findall(r".*\d+\.sst", data)[0]
             level1 = re.findall(r"level:\d+", data)[0].split(":")[1]
 
         # Collect SST filename and level from list_live_files_metadata
-        with open(dumpFilePath2, "r") as tmp:
+        with open(dumpFilePath2) as tmp:
             data = tmp.read()
             filename2 = re.findall(r".*\d+\.sst", data)[0]
             level2 = re.findall(r"level \d+", data)[0].split(" ")[1]
@@ -682,7 +711,7 @@ class LDBTestCase(unittest.TestCase):
         # parse the output and create a map:
         # [key: sstFilename]->[value:[LSM level, Column Family Name]]
         referenceMap = {}
-        with open(dumpFilePath3, "r") as tmp:
+        with open(dumpFilePath3) as tmp:
             data = tmp.read()
             # Note: the following regex are contingent on what the
             # dump_live_files outputs.
@@ -700,7 +729,7 @@ class LDBTestCase(unittest.TestCase):
         # parse the output and create a map:
         # [key: sstFilename]->[value:[LSM level, Column Family Name]]
         testMap = {}
-        with open(dumpFilePath4, "r") as tmp:
+        with open(dumpFilePath4) as tmp:
             data = tmp.read()
             # Since for each SST file, all the information is contained
             # on one line, the parsing is easy to perform and relies on
@@ -741,7 +770,7 @@ class LDBTestCase(unittest.TestCase):
         num = "[0-9]+"
         st = ".*"
         subpat = st + " seq:" + num + ", type:" + num
-        regex = num + ":" + num + "\[" + subpat + ".." + subpat + "\]"
+        regex = num + ":" + num + r"\[" + subpat + ".." + subpat + r"\]"
         expected_pattern = re.compile(regex)
         cmd = "manifest_dump --db=%s"
         manifest_files = self.getManifests(dbPath)
@@ -829,7 +858,7 @@ class LDBTestCase(unittest.TestCase):
         self.assertRunOK("get sst1", "sst1_val")
 
         # Pattern to expect from SST dump.
-        regex = ".*Sst file format:.*\n.*\[blob ref\].*"
+        regex = ".*Sst file format:.*\n.*\\[blob ref\\].*"
         expected_pattern = re.compile(regex)
 
         sst_files = self.getSSTFiles(dbPath)
@@ -848,7 +877,7 @@ class LDBTestCase(unittest.TestCase):
         )
 
         # Pattern to expect from blob file dump.
-        regex = ".*Blob log header[\s\S]*Blob log footer[\s\S]*Read record[\s\S]*Summary"  # noqa
+        regex = r".*Blob log header[\s\S]*Blob log footer[\s\S]*Read record[\s\S]*Summary"  # noqa
         expected_pattern = re.compile(regex)
         blob_files = self.getBlobFiles(dbPath)
         self.assertTrue(len(blob_files) >= 1)
@@ -866,7 +895,7 @@ class LDBTestCase(unittest.TestCase):
         self.assertRunOK("get wal1", "wal1_val")
 
         # Pattern to expect from WAL dump.
-        regex = "^Sequence,Count,ByteSize,Physical Offset,Key\(s\).*"
+        regex = r"^Sequence,Count,ByteSize,Physical Offset,Key\(s\).*"
         expected_pattern = re.compile(regex)
 
         wal_files = self.getWALFiles(dbPath)
@@ -923,7 +952,9 @@ class LDBTestCase(unittest.TestCase):
             "batchput --db=%s --create_if_missing x1 y1 x2 y2 x3 y3 x4 y4" % dbPath,
             "OK",
         )
-        self.assertRunOK("scan --db=%s" % dbPath, "x1 : y1\nx2 : y2\nx3 : y3\nx4 : y4")
+        self.assertRunOK(
+            "scan --db=%s" % dbPath, "x1 ==> y1\nx2 ==> y2\nx3 ==> y3\nx4 ==> y4"
+        )
         dumpFilePath = os.path.join(self.TMP_DIR, "dump1")
         with open(dumpFilePath, "w") as f:
             f.write("x1 ==> y10\nx2 ==> y20\nx3 ==> y30\nx4 ==> y40")
@@ -947,7 +978,7 @@ class LDBTestCase(unittest.TestCase):
             )
         )
         self.assertRunOKFull(
-            "scan --db=%s" % dbPath, "x1 : y10\nx2 : y20\nx3 : y30\nx4 : y40"
+            "scan --db=%s" % dbPath, "x1 ==> y10\nx2 ==> y20\nx3 ==> y30\nx4 ==> y40"
         )
 
 
